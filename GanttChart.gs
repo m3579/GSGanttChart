@@ -42,7 +42,7 @@ function updateGanttChart(range) {
       
     // A duration was edited
     case 4: {
-      updateEditedDuration(range);
+      updateEditedTaskDuration(range);
       break;
     }
     
@@ -80,8 +80,20 @@ function updateEditedStartDate(range) {
 }  
 
 /* A user edited a task duration */
-function updateEditedTaskDuration(range) { 
-  return;
+function updateEditedTaskDuration(range) {
+  var numTasks = getNumberOfTasks();
+  // Get the range representing the dependencies (the fifth column from row 3 downwards)
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var range = sheet.getRange(3, 5, numTasks);
+  
+  Logger.log("Got range: " + range);
+  
+  // For each task, call the updateEditedDependencies function so that the dependencies
+  // are set according to the new start date
+  for (var row = 1; row <= numTasks; row++) {
+    updateEditedDependencies(range.getCell(row, 1));   // the column parameter is defined relative to the range, not the spreadsheet, hence the "1"
+  }
 }
 
 /* The user edited a dependency ID (which task(s) a particular task is dependent on);
@@ -89,9 +101,15 @@ function updateEditedTaskDuration(range) {
 function updateEditedDependencies(range) {
   var newDependencyVal = range.getDisplayValue();
   
+  var currentTaskRow = range.getRow();
+  
   // No dependencies are declared; reset the task to the beginning
   if (newDependencyVal == "") {
     SpreadsheetApp.getActiveSpreadsheet().getSheets()[0].getRange(range.getRow(), 3).setValue(1);
+    Logger.log("before");
+    SpreadsheetApp.getActiveSpreadsheet().getSheets()[0].getRange(currentTaskRow, 4).getValue();
+    Logger.log("After");
+    updateDates(currentTaskRow, 1, SpreadsheetApp.getActiveSpreadsheet().getSheets()[0].getRange(currentTaskRow, 4).getValue());
     return;
   }
   
@@ -145,14 +163,11 @@ function updateEditedDependencies(range) {
   }
   
   // Set start date for current task to that value
-  
   Logger.log(latestDependencyEnd);
-  
   Logger.log("Latest dependency end: " + latestDependencyEnd);
+  SpreadsheetApp.getActiveSheet().getRange(currentTaskRow, 3).setValue(latestDependencyEnd); // column 3 contains the start dates
   
-  var currentTaskRow = range.getRow();
-  
-  SpreadsheetApp.getActiveSheet().getRange(currentTaskRow, 3).setValue(latestDependencyEnd);
+  updateDates(currentTaskRow, latestDependencyEnd, duration);
 }
 
 function getNumberOfTasks() {
@@ -160,7 +175,6 @@ function getNumberOfTasks() {
   var numTasks = 0;
   var taskIDIsNotBlank = true;
   var row = 3;
-  
   while (taskIDIsNotBlank) {
     var taskID = sheet.getRange(row, 1).getValue();
     if (taskID == "") {
@@ -173,6 +187,17 @@ function getNumberOfTasks() {
   }
   
   return numTasks;
+}
+
+/* Updates the values in the dates column */
+function updateDates(currentTaskRow, startDate, duration) {
+  Logger.log("updating dates");
+  var dayOneDate = new Date(SpreadsheetApp.getActiveSheet().getRange(1, 4).getValue());
+  Logger.log(dayOneDate);
+  var dueDate = new Date(dayOneDate.getFullYear(), dayOneDate.getMonth(), dayOneDate.getDate() + (startDate - 1) + duration);
+  Logger.log(dueDate);
+  SpreadsheetApp.getActiveSheet().getRange(currentTaskRow, 6).setValue(
+    (dueDate.getMonth() + 1) + "/" + dueDate.getDate() + "/" + dueDate.getFullYear());
 }
 
 /* Log an error in the Errors column */
